@@ -4,8 +4,7 @@ from mysql.connector import Error
 import hashlib
 import matplotlib.pyplot as plt
 import pandas as pd
-import psycopg2
-from psycopg2 import sql
+
 
 
 
@@ -678,4 +677,5 @@ def main():
 if __name__ == "__main__":
     create_medicine_update_trigger()  # Ensure the trigger exists
     main()
+
 
