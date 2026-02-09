@@ -2,3 +2,4 @@ streamlit
 mysql-connector-python
 pandas
 matplotlib
+psycopg2-binary
