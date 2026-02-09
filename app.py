@@ -28,7 +28,7 @@ def set_background_from_url():
 set_background_from_url()
 
 # =====================================================
-# DATABASE CONNECTION (SAFE)
+# DATABASE CONNECTION
 # =====================================================
 @st.cache_resource
 def create_connection():
@@ -47,6 +47,12 @@ def create_connection():
         st.error(f"Error connecting to database: {e}")
         return None
 
+# =====================================================
+# AUTHENTICATION
+# =====================================================
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
 def check_admin_credentials(username, password):
     conn = create_connection()
     if conn:
@@ -60,7 +66,6 @@ def check_admin_credentials(username, password):
         return result is not None
     return False
 
-
 def add_admin(username, password):
     conn = create_connection()
     if conn:
@@ -72,95 +77,47 @@ def add_admin(username, password):
         conn.commit()
         cur.close()
 
-# =====================================================
-# AUTHENTICATION
-# =====================================================
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def check_admin_credentials(username, password):
-    conn = create_connection()
-    if conn:
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT 1 FROM Admin WHERE username=%s AND password=%s",
-                (username, hash_password(password))
-            )
-            return cur.fetchone() is not None
-        finally:
-            cur.close()
-    return False
-
-def add_admin(username, password):
-    conn = create_connection()
-    if conn:
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                "INSERT INTO Admin (username, password) VALUES (%s,%s)",
-                (username, hash_password(password))
-            )
-            conn.commit()
-        finally:
-            cur.close()
-
 def admin_login_signup():
     st.title("Admin Login / Signup")
-    action = st.radio("Choose Action", ["Login", "Signup"])
+    choice = st.radio("Choose Action", ["Login", "Signup"])
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
-    if st.button(action):
-        if action == "Login":
+    if st.button(choice):
+        if choice == "Login":
             if check_admin_credentials(username, password):
                 st.session_state.logged_in = True
                 st.success("Welcome to Medicine Supply Management System 💊")
             else:
-                st.error("Invalid credentials")
+                st.error("Invalid username or password")
         else:
             add_admin(username, password)
             st.success("Account created. Please login.")
 
 # =====================================================
-# DASHBOARD (COUNT QUERY)
+# DASHBOARD
 # =====================================================
 def count_records(table):
     conn = create_connection()
     if conn:
-        try:
-            cur = conn.cursor()
-            cur.execute(f"SELECT COUNT(*) FROM {table}")
-            return cur.fetchone()[0]
-        finally:
-            cur.close()
+        cur = conn.cursor()
+        cur.execute(f"SELECT COUNT(*) FROM {table}")
+        count = cur.fetchone()[0]
+        cur.close()
+        return count
     return 0
 
 def show_dashboard():
-    st.header("📊 Dashboard - Record Overview")
+    st.header("📊 Dashboard Overview")
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Medicines", count_records("Medicine"))
-    col2.metric("Suppliers", count_records("Supplier"))
-    col3.metric("Products", count_records("Product"))
+    col1.metric("Medicines", count_records("medicine"))
+    col2.metric("Suppliers", count_records("supplier"))
+    col3.metric("Products", count_records("product"))
 
     col4, col5 = st.columns(2)
-    col4.metric("Customers", count_records("Customer"))
-    col5.metric("Purchase Orders", count_records("Purchase_Order"))
-
-    data = {
-        "Table": ["Medicine", "Supplier", "Product", "Customer", "Purchase Order"],
-        "Count": [
-            count_records("Medicine"),
-            count_records("Supplier"),
-            count_records("Product"),
-            count_records("Customer"),
-            count_records("Purchase_Order")
-        ]
-    }
-
-    df = pd.DataFrame(data)
-    st.bar_chart(df.set_index("Table"))
+    col4.metric("Customers", count_records("customer"))
+    col5.metric("Orders", count_records("purchase_order"))
 
 # =====================================================
 # PROCEDURE DASHBOARD
@@ -168,17 +125,16 @@ def show_dashboard():
 def get_table_row_counts():
     conn = create_connection()
     if conn:
-        try:
-            cur = conn.cursor(dictionary=True)
-            cur.callproc("GetTableRowCounts")
-            for result in cur.stored_results():
-                return result.fetchall()
-        finally:
-            cur.close()
+        cur = conn.cursor(dictionary=True)
+        cur.callproc("GetTableRowCounts")
+        for result in cur.stored_results():
+            data = result.fetchall()
+        cur.close()
+        return data
     return []
 
 def procedure_dashboard():
-    st.header("📋 Procedure-Based Table Counts")
+    st.subheader("📊 Stored Procedure Dashboard")
     data = get_table_row_counts()
     if data:
         st.table(pd.DataFrame(data))
@@ -186,38 +142,37 @@ def procedure_dashboard():
         st.info("No data returned")
 
 # =====================================================
-# REPORTS (JOIN / NESTED / AGGREGATE)
+# REPORTS
 # =====================================================
 def reports():
     st.header("📈 Analytical Reports")
-    choice = st.selectbox(
-        "Select Report Type",
+    option = st.selectbox(
+        "Select Report",
         ["Supplier Summary", "Premium Suppliers", "Category-wise Price Average"]
     )
 
     conn = create_connection()
     if not conn:
         return
-
     cur = conn.cursor()
 
-    if choice == "Supplier Summary":
+    if option == "Supplier Summary":
         cur.execute("""
             SELECT s.s_name, COUNT(p.product_id)
-            FROM Supplier s
-            JOIN Product p ON s.supplier_id=p.supplier_id
+            FROM supplier s
+            JOIN product p ON s.supplier_id=p.supplier_id
             GROUP BY s.s_name
         """)
         st.table(pd.DataFrame(cur.fetchall(), columns=["Supplier", "Products"]))
 
-    elif choice == "Premium Suppliers":
+    elif option == "Premium Suppliers":
         cur.execute("""
             SELECT s.s_name, COUNT(p.product_id)
-            FROM Supplier s
-            JOIN Product p ON s.supplier_id=p.supplier_id
+            FROM supplier s
+            JOIN product p ON s.supplier_id=p.supplier_id
             WHERE p.product_id IN (
-                SELECT product_id FROM Medicine
-                WHERE price > (SELECT AVG(price) FROM Medicine)
+                SELECT product_id FROM medicine
+                WHERE price > (SELECT AVG(price) FROM medicine)
             )
             GROUP BY s.s_name
         """)
@@ -226,8 +181,8 @@ def reports():
     else:
         cur.execute("""
             SELECT category, AVG(m.price)
-            FROM Product p
-            JOIN Medicine m ON p.product_id=m.product_id
+            FROM product p
+            JOIN medicine m ON p.product_id=m.product_id
             GROUP BY category
         """)
         st.table(pd.DataFrame(cur.fetchall(), columns=["Category", "Avg Price"]))
@@ -235,117 +190,68 @@ def reports():
     cur.close()
 
 # =====================================================
-# GENERIC CRUD TEMPLATE
-# =====================================================
-def crud_operations(entity, insert_fn, get_fn, update_fn, delete_fn, fields):
-    st.header(f"{entity} Management")
-    action = st.radio("Action", ["Add", "View", "Update", "Delete"])
-
-    if action == "Add":
-        data = {}
-        for f, t in fields.items():
-            data[f] = st.text_input(f) if t == "str" else st.number_input(f, min_value=0)
-        if st.button(f"Add {entity}"):
-            insert_fn(**data)
-
-    elif action == "View":
-        st.table(get_fn())
-
-    elif action == "Update":
-        rid = st.number_input(f"{entity} ID", min_value=1)
-        data = {}
-        for f, t in fields.items():
-            data[f] = st.text_input(f) if t == "str" else st.number_input(f, min_value=0)
-        if st.button("Update"):
-            update_fn(rid, **data)
-
-    else:
-        rid = st.number_input(f"{entity} ID", min_value=1)
-        if st.button("Delete"):
-            delete_fn(rid)
-
-# =====================================================
 # MEDICINE CRUD
 # =====================================================
-def insert_medicine(m_name, price, product_id):
-    conn = create_connection()
-    if conn:
-        cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO Medicine (m_name, price, product_id) VALUES (%s,%s,%s)",
-            (m_name, price, product_id)
-        )
-        conn.commit()
-        cur.close()
+def medicine_crud():
+    st.subheader("Medicine Management")
+    action = st.radio("Action", ["Add", "View", "Update", "Delete"])
 
-def get_medicines():
     conn = create_connection()
+    if not conn:
+        return
     cur = conn.cursor()
-    cur.execute("SELECT * FROM Medicine")
-    data = cur.fetchall()
-    cur.close()
-    return data
 
-def update_medicine(mid, m_name, price, product_id):
-    conn = create_connection()
-    cur = conn.cursor()
-    cur.execute(
-        "UPDATE Medicine SET m_name=%s, price=%s, product_id=%s WHERE medicine_id=%s",
-        (m_name, price, product_id, mid)
-    )
-    conn.commit()
-    cur.close()
+    if action == "Add":
+        name = st.text_input("Medicine Name")
+        price = st.number_input("Price", min_value=0.0)
+        pid = st.number_input("Product ID", min_value=1)
+        if st.button("Add Medicine"):
+            cur.execute(
+                "INSERT INTO medicine (m_name, price, product_id) VALUES (%s,%s,%s)",
+                (name, price, pid)
+            )
+            conn.commit()
+            st.success("Medicine added")
 
-def delete_medicine(mid):
-    conn = create_connection()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM Medicine WHERE medicine_id=%s", (mid,))
-    conn.commit()
-    cur.close()
+    elif action == "View":
+        cur.execute("SELECT * FROM medicine")
+        st.table(cur.fetchall())
 
-# =====================================================
-# SUPPLIER / PRODUCT / CUSTOMER / PURCHASE ORDER CRUD
-# (UNCHANGED LOGIC, SAFE CURSORS)
-# =====================================================
-def insert_supplier(s_name, contact, s_address):
-    conn = create_connection()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO Supplier VALUES (NULL,%s,%s,%s)", (s_name, contact, s_address))
-    conn.commit()
-    cur.close()
+    elif action == "Update":
+        mid = st.number_input("Medicine ID", min_value=1)
+        name = st.text_input("New Name")
+        price = st.number_input("New Price", min_value=0.0)
+        pid = st.number_input("New Product ID", min_value=1)
+        if st.button("Update Medicine"):
+            cur.execute(
+                "UPDATE medicine SET m_name=%s, price=%s, product_id=%s WHERE medicine_id=%s",
+                (name, price, pid, mid)
+            )
+            conn.commit()
+            st.success("Medicine updated")
 
-def get_suppliers():
-    conn = create_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM Supplier")
-    data = cur.fetchall()
-    cur.close()
-    return data
+    else:
+        mid = st.number_input("Medicine ID", min_value=1)
+        if st.button("Delete Medicine"):
+            cur.execute(
+                "DELETE FROM medicine WHERE medicine_id=%s",
+                (mid,)
+            )
+            conn.commit()
+            st.success("Medicine deleted")
 
-def update_supplier(supplier_id, s_name, contact, s_address):
-    conn = create_connection()
-    cur = conn.cursor()
-    cur.execute(
-        "UPDATE Supplier SET s_name=%s, contact=%s, s_address=%s WHERE supplier_id=%s",
-        (s_name, contact, s_address, supplier_id)
-    )
-    conn.commit()
-    cur.close()
-
-def delete_supplier(supplier_id):
-    conn = create_connection()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM Supplier WHERE supplier_id=%s", (supplier_id,))
-    conn.commit()
     cur.close()
 
 # =====================================================
-# LOGOUT & MAIN
+# LOGOUT
 # =====================================================
 def logout():
     st.session_state.clear()
     st.experimental_rerun()
 
+# =====================================================
+# MAIN
+# =====================================================
 def main():
     st.title("💊 Medicine Supply 🚛 Management System")
 
@@ -355,7 +261,7 @@ def main():
 
     menu = st.sidebar.selectbox(
         "Menu",
-        ["Dashboard", "Procedure Dashboard", "Medicine", "Supplier", "Reports"]
+        ["Dashboard", "Procedure Dashboard", "Medicine", "Reports"]
     )
 
     if st.sidebar.button("Logout"):
@@ -366,23 +272,7 @@ def main():
     elif menu == "Procedure Dashboard":
         procedure_dashboard()
     elif menu == "Medicine":
-        crud_operations(
-            "Medicine",
-            insert_medicine,
-            get_medicines,
-            update_medicine,
-            delete_medicine,
-            {"m_name": "str", "price": "int", "product_id": "int"}
-        )
-    elif menu == "Supplier":
-        crud_operations(
-            "Supplier",
-            insert_supplier,
-            get_suppliers,
-            update_supplier,
-            delete_supplier,
-            {"s_name": "str", "contact": "str", "s_address": "str"}
-        )
+        medicine_crud()
     else:
         reports()
 
@@ -392,5 +282,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
