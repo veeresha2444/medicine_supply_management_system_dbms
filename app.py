@@ -47,6 +47,31 @@ def create_connection():
         st.error(f"Error connecting to database: {e}")
         return None
 
+def check_admin_credentials(username, password):
+    conn = create_connection()
+    if conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT 1 FROM admin WHERE username=%s AND password=%s",
+            (username, hash_password(password))
+        )
+        result = cur.fetchone()
+        cur.close()
+        return result is not None
+    return False
+
+
+def add_admin(username, password):
+    conn = create_connection()
+    if conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO admin (username, password) VALUES (%s,%s)",
+            (username, hash_password(password))
+        )
+        conn.commit()
+        cur.close()
+
 # =====================================================
 # AUTHENTICATION
 # =====================================================
@@ -367,4 +392,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
