@@ -29,23 +29,27 @@ def set_background_from_url():
 
 set_background_from_url()
 # Function to create a database connection
+import mysql.connector
+from mysql.connector import Error
+import streamlit as st
+
 @st.cache_resource
 def create_connection():
     try:
         connection = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="Veeresh@123",
-            database="mdb"
+            host="mysql-2a0dc9ac-ganjiveeresh09-b774.h.aivencloud.com",
+            port=20508,   # must be int
+            user="avnadmin",
+            password="AVNS_184o0p5kuMMNGarIKhu",
+            database="mdb",
+            ssl_disabled=False
         )
         return connection if connection.is_connected() else None
+
     except Error as e:
         st.error(f"Error connecting to database: {e}")
         return None
-        return connection if connection.is_connected() else None
-    except Error as e:
-        st.error(f"Error connecting to MySQL database: {e}")
-        return None
+
 
 # Admin login and signup
 def hash_password(password):
@@ -674,3 +678,4 @@ def main():
 if __name__ == "__main__":
     create_medicine_update_trigger()  # Ensure the trigger exists
     main()
+
