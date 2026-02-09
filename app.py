@@ -7,6 +7,27 @@ import pandas as pd
 import psycopg2
 from psycopg2 import sql
 
+
+
+def set_background_from_url():
+    bg_url = "https://as1.ftcdn.net/v2/jpg/09/62/34/24/1000_F_962342401_7qC0xdyxBY8BvWbBtsWCmfUMiA2uyTe6.jpg"
+
+    st.markdown(
+        f"""
+        <style>
+        .stApp {{
+            background-image: url("{bg_url}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+set_background_from_url()
 # Function to create a database connection
 @st.cache_resource
 def create_connection():
