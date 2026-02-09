@@ -37,7 +37,7 @@ def create_connection():
             host="mysql-2a0dc9ac-ganjiveeresh09-b774.h.aivencloud.com",
             port=20508,   # must be int
             user="avnadmin",
-            password="AVNS_184o0p5kuMMNGarIKhu",
+            password="AVNS_5Opa9v9Cu_ZOaO4dm1R",
             database="mdb",
             ssl_disabled=False
         )
@@ -367,3 +367,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
